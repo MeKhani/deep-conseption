@@ -10,8 +10,11 @@ from tool import read_triplet
 from tool import divid_entities
 from tool import exrtract_relation_in_types_entities
 from tool import create_entity_type_triple
+from tool import create_graph
+from tool import add_feature_to_graph
 # import loadMkg as lmkg
 import pandas as pd
+from my_parser import parse
 
 
 # from utils.utils_train import encoding_train
@@ -21,45 +24,48 @@ import pandas as pd
 
 import time
 
+args = parse()
 
 #parse the argument
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--dataset', type=str, required=True,
-                    help='Name of training dataset')
-parser.add_argument('--epoch', type=int, default=1000,
-                    help='Number of epochs to train')
-parser.add_argument('--lr', type=float, default=0.001,
-                    help='Learning rate of the optimizer')
-parser.add_argument('--weight_decay', type=float, default=5e-8,
-                    help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--hidden', type=int, default=64,
-                    help='Dimension of hidden vectors')
-parser.add_argument('--dropout', type=float, default=0.5,
-                    help='Dropout rate')
-# parser.add_argument('--dataset_path',type=str ,default="dataset/NELL-995-v1",help="" )
-
-args = parser.parse_args()
 print("I'm here ")
+# print("graph name",args.name_graph)
 
 np.random.seed(1)
 torch.manual_seed(1)
 #load fb15k237
 #read nell data base 
-dir  = "dataset/NELL-995-v1/train.txt"
+path = args.data_path + args.data_name + "/"+"train.txt"
+# dir  = "dataset/NELL-995-v1/train.txt"
 
-id2ent , i1 ,triple_entities , en2id= read_triplet(dir)
+id2ent , id2rel ,triple_entities , en2id, rel2id = read_triplet(path)
 endic , en_dic_id= divid_entities(id2ent,en2id)
 # create_triples_for_type_entities(triple_entities, en_dic_id)
+# print(en_dic_id)
+
 print("dic length" , len(endic))
+# print("relation to id   " , rel2id)
+# print("id to relation   " , id2rel)
+num_relations = len(id2rel)
+args.num_rel = num_relations
 # print(en2id)
 # print(en_dic_id)
 i_r  ,o_r_c,o_r_s= exrtract_relation_in_types_entities(triple_entities,en_dic_id)
 # print("recived_entity",o_r_c)
+# print("inner relations ",i_r)
 entity_type_triple = create_entity_type_triple(o_r_s,o_r_c)
+graph = create_graph(entity_type_triple)
+add_feature_to_graph(graph,i_r,en_dic_id)
+# graph.ndata["feat"]= torch.ones(graph.num_nodes(),num_relations+1,2)
+# print("Node features")
+# print(graph.ndata["feat"][1])
+# for node in graph.nodes():
+#     print(graph.ndata['feat'][node] )
 
-print("inner realtion in every type",entity_type_triple)
+    # print(f"Node ID: {node}, Feature: {graph.ndata['feature'][node]}")
+# print(graph)
+
+# print("inner realtion in every type",entity_type_triple)
 # print("inner realtion in every type",i_r)
 # print("outer recived relation ",o_r_s)
 # array_triples = np.array(triple_entities)

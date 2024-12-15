@@ -3,6 +3,10 @@ import scipy.sparse as sp
 import torch
 import time
 import random
+import dgl
+import os
+from my_parser import parse
+
 
 def read_data(path):
     
@@ -141,7 +145,7 @@ def read_triplet(path):
             # print(f"{len(triplets)} triplets")
             # self.triplet2idx = {triplet:idx for idx, triplet in enumerate(triplets)}
             # self.triplets_with_inv = np.array([(t, r + len(id2rel), h) for h,r,t in triplets] + triplets)
-            return id2ent, id2rel, triplets,ent2id
+            return id2ent, id2rel, triplets,ent2id, rel2id
 def remove_duplicate(x):
 	    return list(dict.fromkeys(x))
 def divid_entities(entities , en2id ):
@@ -209,3 +213,24 @@ def create_entity_type_triple(outer_sent_relations_for_every_type,outer_recived_
           
      
      return entity_type_triples
+def create_graph(triples):
+     # Extract node and edge information
+    src_nodes = [t[0] for t in triples]  # subjects
+    dst_nodes = [t[2] for t in triples]  # objects
+    edge_types = [t[1] for t in triples]  # relations
+
+    # Create a DGL graph
+    g = dgl.heterograph({
+        ('node', 'relation_type', 'node'): (src_nodes, dst_nodes)
+    })
+    return g
+def add_feature_to_graph(graph,i_r,en_dic_id):
+     args =  parse()
+     graph.ndata["feat"]= torch.zeros(graph.num_nodes(),args.num_rel+1,2)
+     print(graph.ndata["feat"][0])
+
+    #  for node in graph.nodes():
+          
+          
+     return
+
