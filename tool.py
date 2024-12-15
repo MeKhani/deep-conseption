@@ -5,7 +5,6 @@ import time
 import random
 import dgl
 import os
-from my_parser import parse
 
 
 def read_data(path):
@@ -224,13 +223,19 @@ def create_graph(triples):
         ('node', 'relation_type', 'node'): (src_nodes, dst_nodes)
     })
     return g
-def add_feature_to_graph(graph,i_r,en_dic_id):
-     args =  parse()
-     graph.ndata["feat"]= torch.zeros(graph.num_nodes(),args.num_rel+1,2)
-     print(graph.ndata["feat"][0])
-
-    #  for node in graph.nodes():
+def add_feature_to_graph(graph,i_r,en_dic_id, num_rel):
+     graph.ndata["feat"]= torch.zeros(graph.num_nodes(),num_rel+1)
+    #  print(graph.ndata["feat"][0])
+     # Update node features
+     for node in range(graph.num_nodes()):
+        # Update feature at index 0 with the length of en_dic_id[node]
+        graph.ndata["feat"][node][0] = len(en_dic_id.get(node, []))
+        
+        # If the node is in i_r, set specific indices in the feature vector to 1
+        if node in i_r:
+            print(i_r[node])
+            for v in i_r[node]:
+                graph.ndata["feat"][node][v+1] = 1
           
-          
-     return
+     return graph 
 
