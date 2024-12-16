@@ -222,20 +222,44 @@ def create_graph(triples):
     g = dgl.heterograph({
         ('node', 'relation_type', 'node'): (src_nodes, dst_nodes)
     })
+    
     return g
-def add_feature_to_graph(graph,i_r,en_dic_id, num_rel):
-     graph.ndata["feat"]= torch.zeros(graph.num_nodes(),num_rel+1)
-    #  print(graph.ndata["feat"][0])
-     # Update node features
-     for node in range(graph.num_nodes()):
-        # Update feature at index 0 with the length of en_dic_id[node]
-        graph.ndata["feat"][node][0] = len(en_dic_id.get(node, []))
+def add_feature_to_graph_nodes(graph, i_r, en_dic_id, num_rel):
+    # Initialize node features with zeros
+    graph.ndata["feat"] = torch.zeros(graph.num_nodes(), num_rel + 1)
+    
+    # Iterate over nodes and update their features
+    for node, features in enumerate(graph.ndata["feat"]):
+        # Set the 0th feature to the length of en_dic_id[node] (default to 0 if not present)
+        features[0] = len(en_dic_id.get(node, []))
         
-        # If the node is in i_r, set specific indices in the feature vector to 1
+        # Update relation-based features if the node exists in i_r
         if node in i_r:
-            print(i_r[node])
             for v in i_r[node]:
-                graph.ndata["feat"][node][v+1] = 1
-          
-     return graph 
+                features[v + 1] = 1
+
+    return graph
+
+def add_feature_to_graph_edges(graph, entity_type_triples, num_relations):
+    # Initialize edge features with zeros
+    rel_feat = torch.zeros(graph.num_edges(), num_relations)
+    
+    # Create a lookup set for quick membership testing
+    entity_triples_set = set(entity_type_triples)
+    
+    # Get all edges
+    src_nodes, dst_nodes = graph.edges()
+    
+    # Iterate through relations and update features
+    for rel in range(num_relations):
+        mask = [
+            (src.item(), rel, dst.item()) in entity_triples_set
+            for src, dst in zip(src_nodes, dst_nodes)
+        ]
+        rel_feat[torch.tensor(mask), rel] = 1
+
+    # Assign edge features
+    graph.edata["rel_feat"] = rel_feat
+
+    return graph
 
