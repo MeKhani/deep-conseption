@@ -15,6 +15,10 @@ from tool import add_feature_to_graph_nodes
 from tool import add_feature_to_graph_edges
 from model import GraphSAGE
 from model import GCNWithEdgeFeatures
+from model import EdgeFeatureGNNLayer
+from model import GraphAutoencoder
+from model import loss_function
+from model import generat_emmbedding_by_random_walk
 # import loadMkg as lmkg
 import pandas as pd
 from my_parser import parse
@@ -66,13 +70,14 @@ print(graph.edata["rel_feat"][0])
 print(graph.edata["rel_feat"][145])
 print(graph.edata["rel_feat"][5])
 #define model 
+node_features = graph.ndata["feat"]
+edge_features = graph.edata["rel_feat"]
 model =GraphSAGE(in_feats=num_relations+1,hidden_feats=32,out_feats=32) 
-nodes_feature = graph.ndata["feat"]
 optimizer = Adam(model.parameters(),lr=args.learning_rate)
 for epoch in range(args.num_epoch):
     model.train()
     #forward pass 
-    node_embeddings= model(graph,nodes_feature)
+    node_embeddings= model(graph,node_features)
     # Example loss: Contrastive loss (random pairs)
 
     loss = torch.mean(node_embeddings)  # Replace with appropriate unsupervised loss
@@ -82,22 +87,28 @@ for epoch in range(args.num_epoch):
 
     print(f"Epoch {epoch+1}, Loss: {loss.item()}")
 print(node_embeddings)
-model1 = GCNWithEdgeFeatures(in_feats=num_relations+1,edge_feats=num_relations,hidden_feats=32,out_feats=32)
-edge_feat = graph.edata["rel_feat"]
-optimizer1 = Adam(model1.parameters(),lr=args.learning_rate)
+model1 =   GraphAutoencoder(
+        node_in_feats=num_relations+1,
+        edge_in_feats=num_relations,
+        hidden_feats=64,
+        latent_feats=32
+    )
+optimizer = Adam(model1.parameters(),lr=args.learning_rate)
+# True adjacency matrix
+adj_true = graph.adjacency_matrix().to_dense()
 for epoch in range(args.num_epoch):
     model1.train()
-    #forward pass 
-    node_embeddings1= model1(graph,nodes_feature,edge_feat)
-    # Example loss: Contrastive loss (random pairs)
-
-    loss = torch.mean(node_embeddings1)  # Replace with appropriate unsupervised loss
     optimizer.zero_grad()
+   # Forward pass
+    _, adj_pred = model1(graph, node_features, edge_features)
+    
+    # Compute loss
+    loss = loss_function(adj_pred, adj_true)
     loss.backward()
     optimizer.step()
+    print(f"Epoch {epoch+1}/{args.num_epoch}, Loss: {loss.item():.4f}")
 
-    print(f"Epoch {epoch+1}, Loss: {loss.item()}")
-print(node_embeddings1)
+
 
 
 
