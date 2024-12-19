@@ -154,4 +154,23 @@ class GraphAutoencoder(nn.Module):
         return z, adj_pred
 def loss_function(adj_pred, adj_true):
     return F.binary_cross_entropy(adj_pred, adj_true)
+class GraphAutoencoderGNN(nn.Module):
+    def __init__(self, in_feats, hidden_feats, out_feats):
+        super(GraphAutoencoderGNN, self).__init__()
+        self.encoder = GraphSAGE(in_feats, hidden_feats, out_feats)
+        self.decoder = DotProductDecoder()
+
+    def forward(self, graph, features):
+        # Encode
+        z = self.encoder(graph, features)
+        # Decode
+        adj_pred = self.decoder(z)
+        return z, adj_pred
+class DotProductDecoder(nn.Module):
+    def forward(self, z):
+        # Dot product to predict edges
+        adj_pred = torch.sigmoid(torch.matmul(z, z.T))
+        return adj_pred
+
+
     

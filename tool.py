@@ -5,6 +5,8 @@ import time
 import random
 import dgl
 import os
+from collections import defaultdict
+
 
 
 def read_data(path):
@@ -96,55 +98,38 @@ def split_known(triples):
     for i in idx_unknown:
         unknown.append(triples[i])
     return known, unknown
+
 def read_triplet(path):
-            
-        
-       
-            id2ent, id2rel, triplets = [], [], []
-            rel_info = {}
-            pair_info = {}
-            with open(path, 'r') as f:
-                for line in f.readlines():
-                    h, r, t = line.strip().split('\t')
-                    id2ent.append(h)
-                    id2ent.append(t)
-                    id2rel.append(r)
-                    triplets.append((h, r, t))
-            id2ent = remove_duplicate(id2ent)
-            id2rel = remove_duplicate(id2rel)
-            ent2id = {ent: idx for idx, ent in enumerate(id2ent)}
-            rel2id = {rel: idx for idx, rel in enumerate(id2rel)}
-            triplets = [(ent2id[h], rel2id[r], ent2id[t]) for h, r, t in triplets]
-            for (h,r,t) in triplets:
-                if (h,t) in rel_info:
-                    rel_info[(h,t)].append(r)
-                else:
-                    rel_info[(h,t)] = [r]
-                if r in pair_info:
-                    pair_info[r].append((h,t))
-                else:
-                    pair_info[r] = [(h,t)]
-            # G = igraph.Graph.TupleList(np.array(triplets)[:, 0::2])
-            # G_ent = igraph.Graph.TupleList(np.array(triplets)[:, 0::2], directed = True)
-            # spanning = G_ent.spanning_tree()
-            # G_ent.delete_edges(spanning.get_edgelist())
-            
-            # for e in spanning.es:
-            #     e1,e2 = e.tuple
-            #     e1 = spanning.vs[e1]["name"]
-            #     e2 = spanning.vs[e2]["name"]
-            #     self.spanning.append((e1,e2))
-            
-            # spanning_set = set(self.spanning)
+    id2ent = set()
+    id2rel = set()
+    triplets = []
+    rel_info = defaultdict(list)
+    pair_info = defaultdict(list)
 
+    # Read file and process lines
+    with open(path, 'r') as f:
+        for line in f:
+            h, r, t = line.strip().split('\t')
+            id2ent.update([h, t])  # Add head and tail entities (set prevents duplicates)
+            id2rel.add(r)          # Add relation
+            triplets.append((h, r, t))
 
-            
-            # print("-----Train Data Statistics-----")
-            # print(f"{len(self.ent2id)} entities, {len(self.rel2id)} relations")
-            # print(f"{len(triplets)} triplets")
-            # self.triplet2idx = {triplet:idx for idx, triplet in enumerate(triplets)}
-            # self.triplets_with_inv = np.array([(t, r + len(id2rel), h) for h,r,t in triplets] + triplets)
-            return id2ent, id2rel, triplets,ent2id, rel2id
+    # Convert sets to lists to preserve order
+    id2ent = sorted(id2ent)  
+    id2rel = sorted(id2rel)  
+
+    # Map entities and relations to unique IDs
+    ent2id = {ent: idx for idx, ent in enumerate(id2ent)}
+    rel2id = {rel: idx for idx, rel in enumerate(id2rel)}
+
+    # Map triplets to ID-based format and populate rel_info and pair_info
+    triplets = [(ent2id[h], rel2id[r], ent2id[t]) for h, r, t in triplets]
+    for h, r, t in triplets:
+        rel_info[(h, t)].append(r)  # Store all relations for a (head, tail) pair
+        pair_info[r].append((h, t))  # Store all (head, tail) pairs for a relation
+
+    return id2ent, id2rel, triplets, ent2id, rel2id
+
 def remove_duplicate(x):
 	    return list(dict.fromkeys(x))
 def divid_entities(entities , en2id ):
@@ -172,8 +157,11 @@ def exrtract_relation_in_types_entities(triple_entities, en_dic_id):
             # Collect unique relations where `en` is a subject or object
             inner_relations_subject = {relation for subj, relation, obj in triple_entities if subj == en and obj in val}
             outer_relations_subject = {relation for subj, relation, obj in triple_entities if subj == en and obj not in  val}
+            # objects_en = {obj for subj, relation, obj in triple_entities if subj == en and obj not in  val}
             inner_relations_object =  {relation for subj, relation, obj in triple_entities if obj == en and subj in val}
             outer_relations_object =  {relation for subj, relation, obj in triple_entities if obj == en and subj not in val}
+            # subject_en =  {subj for subj, relation, obj in triple_entities if obj == en and subj not in val}
+            
 
             # Update received relations dictionary
             if inner_relations_subject:
@@ -201,6 +189,92 @@ def exrtract_relation_in_types_entities(triple_entities, en_dic_id):
     
 
     return inner_relations_for_every_type,outer_recived_relations_for_every_type,outer_sent_relations_for_every_type
+def generate_group_triples(dic, triples):
+    """
+    Generate triples of the form (k1, rel, k2) from a dictionary and a list of triples.
+    
+    Args:
+        dic (dict): A dictionary where keys are groups (k1, k2, ...) and 
+                    values are sets/lists of entities (e1, e2, ...).
+        triples (list): A list of triples of the form (e1, rel, e2).
+    
+    Returns:
+        list: A list of triples of the form (k1, rel, k2).
+    """
+    # Invert the dictionary to map entities to their corresponding keys
+    entity_to_group = {}
+    inner_relations = defaultdict(set)  # For intra-group relations
+    output_relations = defaultdict(set)  # For intra-group relations
+    input_relations = defaultdict(set)  # For intra-group relations
+    for group, entities in dic.items():
+        for entity in entities:
+            entity_to_group[entity] = group
+
+    # Generate (k1, rel, k2) triples
+    group_triples = []
+    for e1, rel, e2 in triples:
+        k1 = entity_to_group.get(e1)  # Find the group for e1
+        k2 = entity_to_group.get(e2)  # Find the group for e2
+
+
+        if k1 is not None and k2 is not None:  # Only create triples if both entities are mapped
+            if k1 != k2 :
+                group_triples.append((k1, rel, k2))
+                output_relations[k1].add(rel)
+                input_relations[k2].add(rel)
+            else:
+                inner_relations[k1].add(rel)
+
+
+
+    return group_triples ,inner_relations,output_relations,input_relations
+def exrtract_relation_in_types_entities1(triple_entities, en_dic_id):
+    entity_type_triples = []
+    inner_relations_for_every_type = {}
+    outer_recived_relations_for_every_type = {}
+    outer_sent_relations_for_every_type = {}
+
+    for key, val in en_dic_id.items():
+        for en in val:
+            # Collect unique relations where `en` is a subject or object
+            inner_relations_subject = {relation for subj, relation, obj in triple_entities if subj == en and obj in val}
+            outer_relations_subject = {relation for subj, relation, obj in triple_entities if subj == en and obj not in  val}
+            en_rel_obj =  {(rel ,obj ) for subj, rel, obj in triple_entities if subj == en and obj not in  val}
+            inner_relations_object =  {relation for subj, relation, obj in triple_entities if obj == en and subj in val}
+            outer_relations_object =  {relation for subj, relation, obj in triple_entities if obj == en and subj not in val}
+            subj_rel_en=  {(subj ,rel ) for subj, rel, obj in triple_entities if obj == en and subj not in val}
+            for (rel , obj) in en_rel_obj:
+                keys = {k for k, val in en_dic_id.items() if obj in val}
+                triples= {(key, rel, k) for k in keys}
+                entity_type_triples.append(triples) 
+            
+
+            # Update received relations dictionary
+            if inner_relations_subject:
+                if key not in inner_relations_for_every_type:
+                    inner_relations_for_every_type[key] = inner_relations_subject 
+                else:
+                    inner_relations_for_every_type[key].update(inner_relations_subject) 
+            if outer_relations_subject:
+                if key not in outer_recived_relations_for_every_type:
+                    outer_recived_relations_for_every_type[key] = outer_relations_subject 
+                else:
+                    outer_recived_relations_for_every_type[key].update(outer_relations_subject)
+            
+            # Update sent relations dictionary
+            if inner_relations_object:
+                if key not in inner_relations_for_every_type:
+                    inner_relations_for_every_type[key] = inner_relations_object 
+                else:
+                    inner_relations_for_every_type[key].update(inner_relations_object)
+            if outer_relations_object:
+                if key not in outer_sent_relations_for_every_type:
+                    outer_sent_relations_for_every_type[key] = outer_relations_object 
+                else:
+                    outer_sent_relations_for_every_type[key].update(outer_relations_object)
+    
+
+    return inner_relations_for_every_type,outer_recived_relations_for_every_type,outer_sent_relations_for_every_type, entity_type_triples
 def create_entity_type_triple(outer_sent_relations_for_every_type,outer_recived_relations_for_every_type):
      entity_type_triples = []
      for obj , relations in outer_sent_relations_for_every_type.items():
@@ -224,21 +298,41 @@ def create_graph(triples):
     })
     
     return g
-def add_feature_to_graph_nodes(graph, i_r, en_dic_id, num_rel):
+def add_feature_to_graph_nodes(graph, i_r, output_relations, input_relations, num_rel):
+    """
+    Add features to graph nodes based on input, output, and relation-based features.
+
+    Args:
+        graph (DGLGraph): Input graph.
+        i_r (dict): Dictionary mapping nodes to their internal relations.
+        output_relations (dict): Dictionary mapping nodes to their output relations.
+        input_relations (dict): Dictionary mapping nodes to their input relations.
+        num_rel (int): Number of relations.
+
+    Returns:
+        DGLGraph: Graph with updated node features.
+    """
     # Initialize node features with zeros
-    graph.ndata["feat"] = torch.zeros(graph.num_nodes(), num_rel + 1)
-    
-    # Iterate over nodes and update their features
-    for node, features in enumerate(graph.ndata["feat"]):
-        # Set the 0th feature to the length of en_dic_id[node] (default to 0 if not present)
-        features[0] = len(en_dic_id.get(node, []))
-        
-        # Update relation-based features if the node exists in i_r
-        if node in i_r:
-            for v in i_r[node]:
-                features[v + 1] = 1
+    num_nodes = graph.num_nodes()
+    graph.ndata["feat"] = torch.zeros(num_nodes, num_rel * 3)
+
+    # Batch update internal relation features
+    if i_r:
+        for node, rels in i_r.items():
+            graph.ndata["feat"][node, list(rels)] = 1
+
+    # Batch update output relation features
+    if output_relations:
+        for node, rels in output_relations.items():
+            graph.ndata["feat"][node, [num_rel + r for r in rels]] = 1
+
+    # Batch update input relation features
+    if input_relations:
+        for node, rels in input_relations.items():
+            graph.ndata["feat"][node, [2 * num_rel + r for r in rels]] = 1
 
     return graph
+
 
 def add_feature_to_graph_edges(graph, entity_type_triples, num_relations):
     # Initialize edge features with zeros
