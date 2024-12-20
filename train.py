@@ -169,7 +169,7 @@ def main():
     )
     print("GraphAutoencoderGNN embeddings:", gnn_gae_embeddings)
 
+main()
 
-
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
