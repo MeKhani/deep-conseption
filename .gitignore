@@ -1,6 +1,7 @@
 dataset/
 __pycache__/
 data/
+ckpt/
 
 # Ignore all log files
 *.log
